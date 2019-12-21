@@ -174,11 +174,16 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+		// 从缓存中获取bean实例
 		Object singletonObject = this.singletonObjects.get(beanName);
+		// 如果没有创建好的bean实例，并且同名bean没有正在创建中
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			// getSingleton(String beanName)是个public方法，被调用时，可能出现多线程的情况
 			synchronized (this.singletonObjects) {
+				// 存放半成品的bean
 				singletonObject = this.earlySingletonObjects.get(beanName);
 				if (singletonObject == null && allowEarlyReference) {
+					// 处理FactoryBean的场景，返回的是FactoryBean制造的对象实例
 					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
 					if (singletonFactory != null) {
 						singletonObject = singletonFactory.getObject();
@@ -202,8 +207,11 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	public Object getSingleton(String beanName, ObjectFactory<?> singletonFactory) {
 		Assert.notNull(beanName, "Bean name must not be null");
 		synchronized (this.singletonObjects) {
+			// 先从缓存中获取一下Bean成品
 			Object singletonObject = this.singletonObjects.get(beanName);
+			// 如果没有，进行下一步
 			if (singletonObject == null) {
+				// 如果BeanFactory正则销毁，抛异常
 				if (this.singletonsCurrentlyInDestruction) {
 					throw new BeanCreationNotAllowedException(beanName,
 							"Singleton bean creation not allowed while singletons of this factory are in destruction " +
@@ -212,38 +220,45 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 				if (logger.isDebugEnabled()) {
 					logger.debug("Creating shared instance of singleton bean '" + beanName + "'");
 				}
+
+				// 检查inCreationCheckExclusions和singletonsCurrentlyInCreation中是否包含同名bean
+				// 如果有，抛异常
 				beforeSingletonCreation(beanName);
+
 				boolean newSingleton = false;
 				boolean recordSuppressedExceptions = (this.suppressedExceptions == null);
 				if (recordSuppressedExceptions) {
 					this.suppressedExceptions = new LinkedHashSet<>();
 				}
 				try {
+					// 使用传入的ObjectFactroy实例化bean对象
+					// Spring和SpringBoot中，唯一调用了此方法的地方是AbstractBeanFactory
+					// 传入的ObjectFactroy是一个Lambada，核心是AbstractBeanFactory的createBean方法
 					singletonObject = singletonFactory.getObject();
 					newSingleton = true;
-				}
-				catch (IllegalStateException ex) {
+				} catch (IllegalStateException ex) {
 					// Has the singleton object implicitly appeared in the meantime ->
 					// if yes, proceed with it since the exception indicates that state.
 					singletonObject = this.singletonObjects.get(beanName);
 					if (singletonObject == null) {
 						throw ex;
 					}
-				}
-				catch (BeanCreationException ex) {
+				} catch (BeanCreationException ex) {
 					if (recordSuppressedExceptions) {
 						for (Exception suppressedException : this.suppressedExceptions) {
 							ex.addRelatedCause(suppressedException);
 						}
 					}
 					throw ex;
-				}
-				finally {
+				} finally {
 					if (recordSuppressedExceptions) {
 						this.suppressedExceptions = null;
 					}
+					// 检查inCreationCheckExclusions和singletonsCurrentlyInCreation中是否包含同名bean
+					// 如果没有，抛异常
 					afterSingletonCreation(beanName);
 				}
+				// 如果一切顺利，添加到缓存中
 				if (newSingleton) {
 					addSingleton(beanName, singletonObject);
 				}
